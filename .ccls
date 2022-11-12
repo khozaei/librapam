@@ -1,0 +1,4 @@
+clang
+%c
+-I/usr/local/include
+-Iinclude
