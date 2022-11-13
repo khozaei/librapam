@@ -8,8 +8,12 @@ main (int argc, char *argv[])
   LibraPam librapam;
 
   librapam = librapam_new("amin","password");
-  if (librapam_login(librapam))
+  if (librapam_login(librapam)) {
     printf("login successful!\n");
+    if (librapam_change_password (&librapam, "newpassword")) {
+      printf("password changed successfuly\n");
+    }
+  }
   else
     printf("login failed!\n");
   librapam_destroy (&librapam);
