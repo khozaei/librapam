@@ -12,4 +12,4 @@ LibraPam librapam_new (const char *user, const char *pass);
 void librapam_destroy (LibraPam *librapam);
 
 bool librapam_login (LibraPam librapam);
-bool librapam_change_password (LibraPam *librapam, const char *newpass);
+bool librapam_change_password (LibraPam librapam, const char *newpass);
