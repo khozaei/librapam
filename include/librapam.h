@@ -8,13 +8,18 @@
 
 #define MAXLEN 1024
 
-struct librapam;
+#define LIBRA_ERR_PASS_CHANGE_REQ       -10
+#define LIBRA_ERR_AUTHTOK_ERR           -11
+#define LIBRA_ERR_AUTHTOK_RECOVERY_ERR  -12
+#define LIBRA_ERR_AUTHTOK_LOCK_BUSY     -13
+#define LIBRA_ERR_AUTHTOK_DISABLE_AGING -14
+#define LIBRA_ERR_PERM_DENIED           -15
+#define LIBRA_ERR_TRY_AGAIN             -16
+#define LIBRA_ERR_USER_UNKNOWN          -17
+#define LIBRA_ERR_ALLOC_FAILED          -9
 
-typedef struct librapam *LibraPam;
+#define LIBRA_SUCCESS 0
+#define LIBRA_FAILED -1
 
-LibraPam librapam_new (const char *user, const char *pass);
-
-void librapam_destroy (LibraPam *librapam);
-
-bool librapam_login (LibraPam librapam);
-bool librapam_change_password (LibraPam librapam, const char *newpass);
+int librapam_check_user (const char *user, const char *pass);
+int librapam_change_password (const char *user, const char *current_pass, const char *new_pass);

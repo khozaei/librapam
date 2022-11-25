@@ -5,17 +5,18 @@
 int
 main (int argc, char *argv[])
 {
-  LibraPam librapam;
+  int retval;
 
-  librapam = librapam_new("amin","original_password");
-  if (librapam_login(librapam)) {
+  retval = librapam_check_user("amin", "password_example");
+  if (retval == LIBRA_SUCCESS)
     printf("login successful!\n");
-    if (librapam_change_password (librapam, "new_password")) {
-      printf("password changed successfuly\n");
-    }
-  }
   else
     printf("login failed!\n");
-  librapam_destroy (&librapam);
+
+  retval = librapam_change_password("root", "password_example", "new_password");
+  if (retval == LIBRA_SUCCESS)
+    printf("the user password changed successfully\n");
+  else
+    printf("changing password was not successful\n");
   return 0;
 }

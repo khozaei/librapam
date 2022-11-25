@@ -20,6 +20,13 @@ struct librapam {
   struct pam_conv      conv;
 };
 
+typedef struct librapam *LibraPam;
+
+static int do_pam (int num_msg, const struct pam_message **msg, 
+                   struct pam_response **resp, void *app_data);
+static LibraPam librapam_new (const char *user, const char *pass);
+static void librapam_destroy(LibraPam *librapam);
+
 static int
 do_pam (int num_msg, const struct pam_message **msg,
         struct pam_response **resp, void *appdata_ptr)
@@ -27,10 +34,10 @@ do_pam (int num_msg, const struct pam_message **msg,
   struct pam_response *array_resp;
   LibraPam librapam;
 
-  array_resp = calloc (num_msg, sizeof(struct pam_response));
   librapam = (LibraPam)appdata_ptr;
   if (!librapam)
     return PAM_FAIL_DELAY;
+  array_resp = calloc (num_msg, sizeof(struct pam_response));
   for (int i = 0; i < num_msg; i++) {
     array_resp[i].resp_retcode = PAM_SUCCESS;
     if (strstr(msg[i]->msg, "login") != NULL) {
@@ -64,7 +71,7 @@ start (LibraPam librapam)
   return (retval == PAM_SUCCESS);
 }
 
-LibraPam
+static LibraPam
 librapam_new (const char *user, const char *pass)
 {
   LibraPam librapam;
@@ -78,7 +85,7 @@ librapam_new (const char *user, const char *pass)
   return librapam;
 }
 
-void
+static void
 librapam_destroy (LibraPam *librapam)
 {
   if ((*librapam)) {
@@ -93,37 +100,54 @@ librapam_destroy (LibraPam *librapam)
   }
 }
 
-bool
-librapam_login (LibraPam librapam)
+int
+librapam_check_user (const char *user, const char *pass)
 {
   int retval;
+  LibraPam librapam;
 
+#define _return(X) { librapam_destroy(&librapam); return X;}
+  
+  librapam = librapam_new(user, pass);
   if (!librapam)
-    return false;
+    _return(LIBRA_ERR_ALLOC_FAILED);
   if (!start(librapam))
-    return false;
+    _return(LIBRA_FAILED);
   retval = pam_authenticate (librapam->pam_handle, 0);
   if (retval == PAM_SUCCESS) {
     retval = pam_acct_mgmt (librapam->pam_handle, 0);
     pam_end (librapam->pam_handle, retval);
-    return (retval == PAM_SUCCESS);
+    switch (retval) {
+      case PAM_SUCCESS:
+        _return(LIBRA_SUCCESS);
+      case PAM_NEW_AUTHTOK_REQD:
+        _return(LIBRA_ERR_PASS_CHANGE_REQ);
+      default:
+        _return(LIBRA_FAILED);
+    }
   }
-  return false;
+  _return(LIBRA_FAILED);
+
+#undef _return
 }
 
-bool
-librapam_change_password (LibraPam librapam, const char *newpass)
+int
+librapam_change_password (const char *user, const char *current_pass, const char *new_pass)
 {
   int retval;
+  LibraPam librapam;
 
-  if (!(librapam) || !newpass)
-    return false;
+#define _return(X) { librapam_destroy(&librapam); return X;}
+  
+  librapam = librapam_new(user, current_pass);
+  if (!librapam)
+    _return(LIBRA_ERR_ALLOC_FAILED);
   if (!start(librapam))
-    return false;
+    _return(LIBRA_FAILED);
   retval = pam_authenticate (librapam->pam_handle, 0);
   if (retval != PAM_SUCCESS){
     pam_end (librapam->pam_handle, retval);
-    return false;
+    _return(LIBRA_FAILED);
   }
   retval = pam_acct_mgmt (librapam->pam_handle, 0);
   if (retval == PAM_SUCCESS || retval == PAM_NEW_AUTHTOK_REQD) {
@@ -132,40 +156,29 @@ librapam_change_password (LibraPam librapam, const char *newpass)
     flag = 0;
     if (retval == PAM_NEW_AUTHTOK_REQD)
       flag |= PAM_CHANGE_EXPIRED_AUTHTOK;
-    retval = pam_setcred(librapam->pam_handle, PAM_ESTABLISH_CRED);
-    if (retval != PAM_SUCCESS) {
-      pam_end(librapam->pam_handle,retval);
-      fprintf(stderr, "error: %s\n", pam_strerror(librapam->pam_handle,retval));
-      return false;
-    }
-    retval = pam_open_session(librapam->pam_handle,0);
-    if (retval != PAM_SUCCESS) {
-      pam_end(librapam->pam_handle,retval);
-      fprintf(stderr, "error: %s\n", pam_strerror(librapam->pam_handle,retval));
-      return false;
-    }
-    retval = pam_setcred (librapam->pam_handle, PAM_REINITIALIZE_CRED);
-    if (retval != PAM_SUCCESS) {
-      pam_end(librapam->pam_handle,retval);
-      fprintf(stderr, "error: %s\n", pam_strerror(librapam->pam_handle,retval));
-      return false;
-    }
-    librapam->new_pass = strdup(newpass);
+    librapam->new_pass = strdup(new_pass);
     retval = pam_chauthtok (librapam->pam_handle, flag);
-    if (retval == PAM_SUCCESS) {
-      free (librapam->pass);
-      librapam->pass = strdup (newpass);
-      free (librapam->new_pass);
-      librapam->new_pass = NULL;
-      retval = pam_close_session(librapam->pam_handle,retval);
-      pam_end (librapam->pam_handle, retval);
-      return true;
-    } else {
-      fprintf (stderr, "error: %s\n", pam_strerror(librapam->pam_handle,retval));
-      retval = pam_close_session(librapam->pam_handle,retval);
-      retval = pam_setcred(librapam->pam_handle, PAM_DELETE_CRED);
-      pam_end (librapam->pam_handle, retval);
+    pam_end (librapam->pam_handle, retval);
+    switch (retval) {
+      case PAM_SUCCESS:
+        _return(LIBRA_SUCCESS);
+      case PAM_AUTHTOK_ERR:
+        _return(LIBRA_ERR_AUTHTOK_ERR);
+      case PAM_AUTHTOK_RECOVERY_ERR:
+        _return(LIBRA_ERR_AUTHTOK_RECOVERY_ERR);
+      case PAM_AUTHTOK_LOCK_BUSY:
+        _return(LIBRA_ERR_AUTHTOK_LOCK_BUSY);
+      case PAM_AUTHTOK_DISABLE_AGING:
+        _return(LIBRA_ERR_AUTHTOK_DISABLE_AGING);
+      case PAM_PERM_DENIED:
+        _return(LIBRA_ERR_PERM_DENIED);
+      case PAM_TRY_AGAIN:
+        _return(LIBRA_ERR_TRY_AGAIN);
+      case PAM_USER_UNKNOWN:
+        _return(LIBRA_ERR_USER_UNKNOWN);
     }
   }
-  return false;
+  _return(LIBRA_FAILED);
+
+#undef _return
 }
