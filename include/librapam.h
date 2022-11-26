@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  */
-#include <stdbool.h>
 
 #define MAXLEN 1024
 
@@ -21,5 +20,11 @@
 #define LIBRA_SUCCESS 0
 #define LIBRA_FAILED -1
 
+struct librapam_interface {
+  int (*check_user) (const char *user, const char *pass);
+  int (*change_password) (const char *user, const char *current_pass, const char *new_pass);
+};
+
+extern struct librapam_interface librapam;
 int librapam_check_user (const char *user, const char *pass);
 int librapam_change_password (const char *user, const char *current_pass, const char *new_pass);

@@ -28,6 +28,11 @@ static int do_pam (int num_msg, const struct pam_message **msg,
 static LibraPam librapam_new (const char *user, const char *pass);
 static void librapam_destroy(LibraPam *librapam);
 
+struct librapam_interface librapam = {
+  .check_user = &librapam_check_user,
+  .change_password = &librapam_change_password,
+};
+
 static int
 do_pam (int num_msg, const struct pam_message **msg,
         struct pam_response **resp, void *appdata_ptr)
